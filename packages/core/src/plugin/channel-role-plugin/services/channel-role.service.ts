@@ -9,9 +9,10 @@ import { ChannelRole } from '../entities/channel-role.entity';
 
 /**
  * @description
- * Contains methods relating to {@link ChannelRole} entities.
- *
- * @todo TODO
+ * Contains methods relating to {@link ChannelRole} entities for managing
+ * channel-specific role assignments for users. This service is used by
+ * the {@link ChannelRolePermissionResolverStrategy} to manage user permissions
+ * on a per-channel basis.
  *
  * @docsCategory services
  */
@@ -20,7 +21,14 @@ export class ChannelRoleService {
     constructor(private connection: TransactionalConnection) {}
 
     /**
-     * @throws EntityNotFoundError
+     * @description
+     * Creates a new ChannelRole entity that assigns a specific role to a user
+     * within a particular channel context.
+     * 
+     * @param ctx The request context
+     * @param input Object containing userId, channelId, and roleId
+     * @returns Promise resolving to the created ChannelRole entity
+     * @throws EntityNotFoundError if user, channel, or role cannot be found
      */
     async create(
         ctx: RequestContext,
@@ -43,21 +51,25 @@ export class ChannelRoleService {
     }
 
     /**
-     * @throws EntityNotFoundError
+     * @description
+     * Updates an existing ChannelRole entity with new user, channel, or role assignments.
+     * 
+     * @param ctx The request context
+     * @param input Object containing the ChannelRole id and new userId, channelId, and roleId
+     * @returns Promise resolving to the updated ChannelRole entity
+     * @throws EntityNotFoundError if the ChannelRole, user, channel, or role cannot be found
      */
     async update(
         ctx: RequestContext,
         input: { id: ID; userId: ID; channelId: ID; roleId: ID },
     ): Promise<ChannelRole> {
+        // Promise.all will fail fast if any entity is not found
         const [channelRole, user, channel, role] = await Promise.all([
             this.connection.getEntityOrThrow(ctx, ChannelRole, input.id),
             this.connection.getEntityOrThrow(ctx, User, input.userId),
             this.connection.getEntityOrThrow(ctx, Channel, input.channelId),
             this.connection.getEntityOrThrow(ctx, Role, input.roleId),
         ]);
-
-        // TODO Dont quite remember if the promise all returned the first error
-        // Check it out a lil later. Would be nice to show which entity specifically failed
 
         channelRole.user = user;
         channelRole.channel = channel;
@@ -69,7 +81,13 @@ export class ChannelRoleService {
     }
 
     /**
-     * @throws EntityNotFoundError
+     * @description
+     * Deletes a ChannelRole entity, removing the user's role assignment for the specified channel.
+     * 
+     * @param ctx The request context
+     * @param id The ID of the ChannelRole to delete
+     * @returns Promise resolving to a DeletionResponse indicating success or failure
+     * @throws EntityNotFoundError if the ChannelRole cannot be found
      */
     async delete(ctx: RequestContext, id: ID): Promise<DeletionResponse> {
         const channelRole = await this.connection.getEntityOrThrow(ctx, ChannelRole, id);

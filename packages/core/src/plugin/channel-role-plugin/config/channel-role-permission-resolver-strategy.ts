@@ -6,6 +6,7 @@ import {
 
 import { RequestContext } from '../../../api/index';
 import { idsAreEqual, Injector } from '../../../common/index';
+import { InternalServerError } from '../../../common/error/errors';
 import {
     ChannelRoleInput,
     RolePermissionResolverStrategy,
@@ -70,7 +71,7 @@ export class ChannelRolePermissionResolverStrategy implements RolePermissionReso
             }
         }
 
-        // TODO maybe just make it sequential
+        // Create new channel role assignments in parallel for better performance
         await Promise.all(
             toAddPairs.map(pair =>
                 this.channelRoleService.create(ctx, {
@@ -81,12 +82,13 @@ export class ChannelRolePermissionResolverStrategy implements RolePermissionReso
             ),
         );
 
-        // TODO should we parallelize like above, does that even actually help?
-        // try it out later
+        // Remove existing channel role assignments
         for (const channelRole of toRemoveChannelRoles) {
             const response = await this.channelRoleService.delete(ctx, channelRole.id);
             if (response.result === DeletionResult.NOT_DELETED) {
-                // TODO Throw InternalServerError here?
+                throw new InternalServerError('error.channel-role-deletion-failed', {
+                    message: response.message || 'Unknown error',
+                });
             }
         }
     }
@@ -97,18 +99,11 @@ export class ChannelRolePermissionResolverStrategy implements RolePermissionReso
             relations: ['user', 'channel', 'role'],
         });
 
-        const channelRolePermissions = new Array<UserChannelPermissions>(channelRoleEntries.length);
-        for (let i = 0; i < channelRoleEntries.length; i++) {
-            channelRolePermissions[i] = {
-                id: channelRoleEntries[i].channel.id,
-                token: channelRoleEntries[i].channel.token,
-                code: channelRoleEntries[i].channel.code,
-                permissions: channelRoleEntries[i].role.permissions,
-            };
-        }
-        // TODO: Is this needed?
-        channelRoleEntries.sort((a, b) => (a.id < b.id ? -1 : 1));
-
-        return channelRolePermissions;
+        return channelRoleEntries.map(entry => ({
+            id: entry.channel.id,
+            token: entry.channel.token,
+            code: entry.channel.code,
+            permissions: entry.role.permissions,
+        }));
     }
 }
